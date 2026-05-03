@@ -2,25 +2,31 @@ import requests
 import json
 import os
 
-def get_lotto():
-    # 최신 회차 정보를 가져오는 로직 (예시로 1110회 설정)
-    url = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=1110"
-    try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        
-        if data.get("returnValue") == "success":
-            # public 폴더에 저장 (Next.js 접근용)
-            os.makedirs('public', exist_ok=True)
-            with open("public/lotto_data.json", "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            print("데이터 업데이트 완료")
-        else:
-            print("데이터를 가져오는 데 실패했습니다.")
-            exit(1)
-    except Exception as e:
-        print(f"오류 발생: {e}")
-        exit(1)
+def fetch_lotto(drwNo):
+    url = f"https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={drwNo}"
+    response = requests.get(url)
+    data = response.json()
+    if data.get("returnValue") == "success":
+        return data
+    return None
+
+def main():
+    # 폴더가 없으면 생성
+    os.makedirs('data', exist_ok=True)
+    
+    file_path = 'data/lotto_data.json'
+    
+    # 1회차부터 최신회차까지 수집 (간단 예시)
+    all_data = []
+    round_num = 1
+    while True:
+        result = fetch_lotto(round_num)
+        if not result: break
+        all_data.append(result)
+        round_num += 1
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(all_data, f, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
-    get_lotto()
+    main()
