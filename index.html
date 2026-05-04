@@ -331,120 +331,23 @@ function setStatus(type,text){
 // ── 데이터 로드 ───────────────────────────────────────────────
 async function loadData(){
   setStatus("load","데이터 로딩 중...");
-  let json=null;
-  let source="";
 
-  // ① 같은 저장소 lotto_data.json (GitHub Actions 자동 생성)
+  // lotto_data.json 만 사용 (GitHub Actions가 생성)
+  // 없으면 안내 메시지만 표시 — 무한로딩 없음
   try{
     const r=await fetch(DATA_URL+"?t="+Date.now(),{cache:"no-store"});
-    if(r.ok){
-      const txt=await r.text();
-      json=JSON.parse(txt);
-      source="lotto_data.json";
-    }
-  }catch(e){ console.warn("lotto_data.json 실패:",e.message); }
-
-  // ② 동행복권 공식 API 직접 호출 (최근 20회차만)
-  if(!json||!json.draws||!json.draws.length){
-    setStatus("load","동행복권 API에서 직접 로딩 중...");
-    try{
-      const DHL="https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=";
-      // 최신 회차 탐색 (1100~1300 범위)
-      let latest=0;
-      for(let n=1300;n>=1100;n--){
-        try{
-          const r=await fetch(DHL+n,{cache:"no-store"});
-          const d=await r.json();
-          if(d.returnValue==="success"){ latest=n; break; }
-        }catch(e){}
-      }
-      if(latest>0){
-        const draws=[];
-        const start=Math.max(1,latest-49);
-        for(let n=latest;n>=start;n--){
-          try{
-            const r=await fetch(DHL+n,{cache:"no-store"});
-            const d=await r.json();
-            if(d.returnValue==="success"){
-              draws.push({
-                round:d.drwNo, date:d.drwNoDate,
-                numbers:[d.drwtNo1,d.drwtNo2,d.drwtNo3,d.drwtNo4,d.drwtNo5,d.drwtNo6],
-                bonus:d.bnusNo,
-                w1:d.firstPrzwnerCo, a1:d.firstWinamnt,
-                w2:d.secondPrzwnerCo, a2:d.secondWinamnt,
-                w3:d.thirdPrzwnerCo, a3:d.thirdWinamnt,
-              });
-              await new Promise(r=>setTimeout(r,80));
-            }
-          }catch(e){}
-        }
-        if(draws.length){
-          json={draws, updated:"동행복권 API"};
-          source="동행복권 API (최근 50회차)";
-        }
-      }
-    }catch(e){ console.warn("동행복권 API 실패:",e.message); }
+    if(!r.ok) throw new Error("lotto_data.json 없음 (HTTP "+r.status+")");
+    const txt=await r.text();
+    if(!txt||txt.trim().startsWith("<"))
+      throw new Error("lotto_data.json 없음 — HTML 반환됨");
+    const json=JSON.parse(txt);
+    if(!json.draws||!json.draws.length)
+      throw new Error("draws 데이터 비어있음");
+    DB=json.draws.filter(d=>d.numbers&&d.numbers.length===6).sort((a,b)=>b.round-a.round);
+    setStatus("ok",`${DB.length}회차 로드 완료 · ${json.updated||""}`);
+  }catch(e){
+    throw new Error(e.message);
   }
-
-  // ③ allProxy — CORS 프록시 경유 동행복권
-  if(!json||!json.draws||!json.draws.length){
-    setStatus("load","프록시 경유 로딩 시도 중...");
-    const PROXIES=[
-      "https://api.allorigins.win/get?url=",
-      "https://corsproxy.io/?",
-    ];
-    const DHL="https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=";
-    for(const proxy of PROXIES){
-      try{
-        const r=await fetch(proxy+encodeURIComponent(DHL+"1180"),{cache:"no-store"});
-        const raw=await r.json();
-        const txt=raw.contents||raw;
-        const d=typeof txt==="string"?JSON.parse(txt):txt;
-        if(d.returnValue==="success"){
-          // 프록시 작동 확인 → 최근 30회차 수집
-          const draws=[];
-          let latest=1180;
-          for(let n=1300;n>=1100;n--){
-            try{
-              const rr=await fetch(proxy+encodeURIComponent(DHL+n),{cache:"no-store"});
-              const rawR=await rr.json();
-              const dd=typeof(rawR.contents||rawR)==="string"?JSON.parse(rawR.contents||rawR):(rawR.contents||rawR);
-              if(dd.returnValue==="success"){latest=n;break;}
-            }catch(e){}
-          }
-          for(let n=latest;n>=Math.max(1,latest-29);n--){
-            try{
-              const rr=await fetch(proxy+encodeURIComponent(DHL+n),{cache:"no-store"});
-              const rawR=await rr.json();
-              const dd=typeof(rawR.contents||rawR)==="string"?JSON.parse(rawR.contents||rawR):(rawR.contents||rawR);
-              if(dd.returnValue==="success"){
-                draws.push({
-                  round:dd.drwNo, date:dd.drwNoDate,
-                  numbers:[dd.drwtNo1,dd.drwtNo2,dd.drwtNo3,dd.drwtNo4,dd.drwtNo5,dd.drwtNo6],
-                  bonus:dd.bnusNo,
-                  w1:dd.firstPrzwnerCo, a1:dd.firstWinamnt,
-                  w2:dd.secondPrzwnerCo, a2:dd.secondWinamnt,
-                  w3:dd.thirdPrzwnerCo, a3:dd.thirdWinamnt,
-                });
-                await new Promise(r=>setTimeout(r,100));
-              }
-            }catch(e){}
-          }
-          if(draws.length){
-            json={draws,updated:"프록시 경유"};
-            source="CORS 프록시 경유";
-            break;
-          }
-        }
-      }catch(e){ console.warn("프록시 실패:",e.message); }
-    }
-  }
-
-  if(!json||!json.draws||!json.draws.length)
-    throw new Error("모든 데이터 소스 연결 실패\n\nGitHub Pages에 lotto_data.json이 없습니다.\n아래 안내를 따라 GitHub Actions를 실행해주세요.");
-
-  DB=json.draws.filter(d=>d.numbers&&d.numbers.length===6).sort((a,b)=>b.round-a.round);
-  setStatus("ok",`${DB.length}회차 로드 완료 (${source})`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1016,14 +919,14 @@ async function init(){
     setStatus("err","데이터 로드 실패");
     document.getElementById("latestCard").innerHTML=
       `<div class="card-title"><span>🏆</span>최신 회차 당첨 정보</div>
-       <div class="err-box" style="text-align:left;line-height:1.9;">
-         ❌ <b>데이터 연결 실패</b><br><br>
-         <b>해결 방법:</b><br>
-         1️⃣ GitHub 저장소에 <code>fetch_lotto.py</code> 업로드<br>
-         2️⃣ <code>.github/workflows/update_lotto.yml</code> 업로드<br>
-         3️⃣ Actions 탭 → <b>수동 실행(workflow_dispatch)</b> 클릭<br>
-         4️⃣ <code>lotto_data.json</code> 생성 확인 후 새로고침<br><br>
-         <span style="font-size:10px;color:var(--muted);">${err.message}</span>
+       <div class="err-box" style="text-align:left;line-height:2;">
+         ❌ <b>lotto_data.json 없음</b><br><br>
+         <b>아래 순서대로 해주세요:</b><br>
+         1️⃣ 저장소에 <b>fetch_lotto.py</b> 있는지 확인<br>
+         2️⃣ 저장소에 <b>.github/workflows/update_lotto.yml</b> 있는지 확인<br>
+         3️⃣ <b>Actions 탭</b> → 로또 데이터 자동 업데이트 → <b>Run workflow</b><br>
+         4️⃣ ✅ 완료 후 이 페이지 <b>새로고침</b><br><br>
+         <span style="font-size:10px;color:var(--muted);">오류: ${err.message}</span>
        </div>`;
   }finally{
     btn.classList.remove("loading");btn.disabled=false;
