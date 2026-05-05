@@ -1,35 +1,48 @@
-name: 로또 데이터 자동 업데이트
+name: Update Lotto Data
 
 on:
-  schedule:
-    - cron: '0 15 * * 6'
   workflow_dispatch:
+  schedule:
+    # 매주 토요일 22:20 KST = 토요일 13:20 UTC
+    - cron: "20 13 * * 6"
+    # 혹시 토요일 밤 반영이 늦을 때 대비: 일요일 00:30 KST = 토요일 15:30 UTC
+    - cron: "30 15 * * 6"
+
+permissions:
+  contents: write
 
 jobs:
-  update:
+  update-lotto:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - name: 체크아웃
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Python 3.11 설정
-        uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: 패키지 설치
-        run: pip install requests
+      - name: Update lotto_data.json
+        run: |
+          python fetch_lotto.py
 
-      - name: 데이터 수집 실행
-        run: python fetch_lotto.py
+      - name: Validate JSON
+        run: |
+          python -m json.tool lotto_data.json > /tmp/lotto_data_check.json
+          echo "JSON_OK"
 
-      - name: 커밋 & 푸시
+      - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add lotto_data.json
-          git diff --staged --quiet || git commit -m "lotto update $(date +'%Y-%m-%d')"
-          git push
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet lotto_data.json; then
+            echo "변경 없음: lotto_data.json already up to date"
+          else
+            git add lotto_data.json
+            git commit -m "Update lotto data"
+            git push
+            echo "업데이트 커밋 완료"
+          fi
