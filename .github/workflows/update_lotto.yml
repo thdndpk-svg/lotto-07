@@ -3,18 +3,23 @@ name: Update Lotto Data
 on:
   workflow_dispatch:
   schedule:
-    # 토요일 22:30 KST
-    - cron: "30 13 * * 6"
-    # 일요일 00:30 KST 보조 실행
-    - cron: "30 15 * * 6"
+    # GitHub Actions cron은 기본 UTC 기준.
+    # 토요일 22:45 KST = 토요일 13:45 UTC
+    - cron: "45 13 * * 6"
+    # 일요일 00:45 KST = 토요일 15:45 UTC
+    - cron: "45 15 * * 6"
 
 permissions:
   contents: write
 
+concurrency:
+  group: update-lotto-data
+  cancel-in-progress: true
+
 jobs:
   update-lotto:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
 
     steps:
       - name: Checkout repository
@@ -28,21 +33,34 @@ jobs:
       - name: Update lotto_data.json
         env:
           PYTHONUNBUFFERED: "1"
-          LOTTO_HISTORY_LIMIT: "60"
+          LOTTO_HISTORY_LIMIT: "120"
+          DHL_TIMEOUT: "3"
+          PAGE_TIMEOUT: "10"
+          LOTTO_SOURCE_ORDER: "lottotapa_all,dhlottery,lottotapa_single"
         run: |
           python -u fetch_lotto.py
 
       - name: Validate JSON
         run: |
           python -m json.tool lotto_data.json > /tmp/lotto_data_check.json
-          echo "JSON_OK"
+          python - <<'PY'
+          import json
+          data = json.load(open("lotto_data.json", encoding="utf-8"))
+          assert data["status"] == "ok"
+          assert data["latest_round"] >= 1
+          assert len(data["draws"]) >= 1
+          print("JSON_OK")
+          print("latest_round =", data["latest_round"])
+          print("total =", data["total"])
+          print("sources =", data.get("sources"))
+          PY
 
       - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet lotto_data.json; then
+          if [ -z "$(git status --porcelain lotto_data.json)" ]; then
             echo "변경 없음"
           else
             git add lotto_data.json
