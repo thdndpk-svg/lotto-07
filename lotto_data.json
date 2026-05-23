@@ -1,12 +1,32 @@
 {
   "status": "ok",
-  "updated": "2026-05-17 01:33:27 KST",
-  "latest_round": 1224,
-  "total": 122,
+  "updated": "2026-05-23 23:49:50 KST",
+  "latest_round": 1225,
+  "total": 123,
   "sources": [
     "lottotapa_all"
   ],
   "draws": [
+    {
+      "round": 1225,
+      "date": "2026-05-23",
+      "numbers": [
+        8,
+        9,
+        19,
+        25,
+        41,
+        42
+      ],
+      "bonus": 33,
+      "w1": 0,
+      "a1": 0,
+      "w2": 0,
+      "a2": 0,
+      "w3": 0,
+      "a3": 0,
+      "source": "lottotapa_all"
+    },
     {
       "round": 1224,
       "date": "2026-05-16",
