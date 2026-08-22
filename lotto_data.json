@@ -1,12 +1,32 @@
 {
   "status": "ok",
-  "updated": "2026-08-16 00:53:50 KST",
-  "latest_round": 1237,
-  "total": 135,
+  "updated": "2026-08-22 22:57:54 KST",
+  "latest_round": 1238,
+  "total": 136,
   "sources": [
     "lottotapa_all"
   ],
   "draws": [
+    {
+      "round": 1238,
+      "date": "2026-08-22",
+      "numbers": [
+        2,
+        13,
+        18,
+        32,
+        38,
+        42
+      ],
+      "bonus": 22,
+      "w1": 0,
+      "a1": 0,
+      "w2": 0,
+      "a2": 0,
+      "w3": 0,
+      "a3": 0,
+      "source": "lottotapa_all"
+    },
     {
       "round": 1237,
       "date": "2026-08-15",
